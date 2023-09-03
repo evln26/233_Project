@@ -1,71 +1,46 @@
 import cv2
-from pyzbar.pyzbar import decode
 import requests
+from pyzbar.pyzbar import decode
+from time import sleep
 
-TOKEN = "BBFF-HRGwpx4IeRlvLnblG1tRny0YehPjWz"
-DEVICE_LABEL = "demo"
+# Ubidots API Credentials
+TOKEN = "BBFF-oqbWpMBA5aTdSZMZnlmSG9MahP38bo"
+DEVICE_LABEL = "raspi"
 BARCODE_LABEL = "barcode"
-COUNT_LABEL_PREFIX1 = "1111_count"
-COUNT_LABEL_PREFIX2 = "2222_count"
-COUNT_LABEL_PREFIX3 = "3333_count"
-COUNT_LABEL_PREFIX4 = "4444_count"
-COUNT_LABEL_PREFIX5 = "5555_count"
+STOCK_IN_LABEL = "stock_in"
+STOCK_OUT_LABEL = "stock_out"
 
 # Initialize the camera
 cap = cv2.VideoCapture(0)  # 0 indicates the default camera (usually the laptop's built-in camera)
 
 # Dictionary to store individual barcode counts
 barcode_counts = {
-    "1111": 0,
-    "2222": 0,
-    "3333": 0,
-    "4444": 0,
-    "5555": 0
+    "sepatu": 0,
+    "topi": 0,
+    "dasi": 0,
+    "sabuk": 0,
+    "penggaris": 0
 }
 
-def send_data_to_ubidots(barcode_data):
-    # Send the barcode data to the respective variable
-    barcode_payload = {
-        BARCODE_LABEL: barcode_data
+def send_data_to_ubidots(label, quantity):
+    # Send the stock data to the respective variable
+    stock_payload = {
+        label: quantity
     }
 
-    url = f"http://industrial.api.ubidots.com/api/v1.6/devices/{DEVICE_LABEL}"
+    url = f"https://stem.ubidots.com/app/devices/64db21c4358957000c29f935"
     headers = {"X-Auth-Token": TOKEN, "Content-Type": "application/json"}
 
     try:
-        response = requests.post(url=url, headers=headers, json=barcode_payload)
+        response = requests.post(url=url, headers=headers, json=stock_payload)
         if response.status_code == 200:
-            print(f"Barcode sent to Ubidots: {barcode_data}")
+            print(f"Stock data sent to Ubidots: {label}={quantity}")
         else:
-            print("Failed to send barcode to Ubidots. Status code:", response.status_code)
+            print(f"Failed to send stock data to Ubidots. Status code: {response.status_code}")
     except requests.exceptions.RequestException as e:
         print("Connection error:", e)
 
-    # Send the barcode count data to the respective variables
-    for barcode, count in barcode_counts.items():
-        if barcode == "1111":
-            count_variable_name = COUNT_LABEL_PREFIX1
-        elif barcode == "2222":
-            count_variable_name = COUNT_LABEL_PREFIX2
-        elif barcode == "3333":
-            count_variable_name = COUNT_LABEL_PREFIX3
-        elif barcode == "4444":
-            count_variable_name = COUNT_LABEL_PREFIX4
-        elif barcode == "5555":
-            count_variable_name = COUNT_LABEL_PREFIX5
-        
-        count_payload = {
-            count_variable_name: count
-        }
-
-        try:
-            response = requests.post(url=url, headers=headers, json=count_payload)
-            if response.status_code == 200:
-                print(f"Count sent to Ubidots: {count_variable_name}={count}")
-            else:
-                print(f"Failed to send count to Ubidots. Status code for {count_variable_name}:", response.status_code)
-        except requests.exceptions.RequestException as e:
-            print(f"Connection error for {count_variable_name}:", e)
+item_count = 0
 
 while True:
     # Read a frame from the camera
@@ -78,14 +53,26 @@ while True:
     for barcode in barcodes:
         # Extract the data from the barcode
         barcode_data = barcode.data.decode('utf-8')
-        
+
         # Check if the scanned barcode is one of the fixed barcodes
         if barcode_data in barcode_counts:
+            # Determine whether it's a stock in or stock out operation (you should implement this logic)
+            is_stock_in = True  # Example: Assume all barcodes are for stock in
+
             # Update the count for the barcode
             barcode_counts[barcode_data] += 1
-            
-            # Send both barcode data and count data to Ubidots
-            send_data_to_ubidots(barcode_data)
+
+            # Send stock data to Ubidots based on stock in or stock out
+            if is_stock_in:
+                send_data_to_ubidots(STOCK_IN_LABEL, 1)  # Increase stock in by 1
+            else:
+                send_data_to_ubidots(STOCK_OUT_LABEL, 1)  # Increase stock out by 1
+
+            # Update and print the total item count
+            item_count += 1
+            print(f"Scanned Barcode is {barcode_data}")
+            print("   Item Added")
+            print(f"  Total Item = {item_count}")
 
     # Display the frame with detected barcodes
     cv2.imshow('Barcode Reader', frame)
